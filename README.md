@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ClipIt Video Clipper
 
 Created: Sat, 11 Jul 2026 11:59
@@ -80,3 +81,7 @@ Copy-Item manifest.firefox.json manifest.json
 ```powershell
 npm test
 ```
+=======
+# clipit
+Web extension to clip videos and share them with your kids since they blocked you on facebook
+>>>>>>> f58d302e75d5689dc25bc5053e1cbd4986c19d0c
