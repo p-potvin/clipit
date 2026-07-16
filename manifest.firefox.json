@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "ClipIt Video Clipper",
+  "version": "0.1.0",
+  "description": "Start, pause, and save clips from the video you right-clicked.",
+  "permissions": ["contextMenus", "downloads", "activeTab"],
+  "background": {
+    "scripts": ["src/i18n.js", "src/background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/i18n.js", "src/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_title": "ClipIt"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "clipit@vaultwares.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}
