@@ -9,6 +9,7 @@
       recording: "Recording",
       paused: "Paused",
       saving: "Saving",
+      errorTitle: "Error",
       captureUnsupported: "This video cannot be clipped in this browser or page.",
       noVideoSelected: "Right-click a video before starting a clip.",
       downloadFailed: "The browser download prompt could not be opened."
@@ -22,6 +23,7 @@
       recording: "Enregistrement",
       paused: "En pause",
       saving: "Enregistrement du fichier",
+      errorTitle: "Erreur",
       captureUnsupported: "Cette vidéo ne peut pas être extraite dans ce navigateur ou sur cette page.",
       noVideoSelected: "Faites un clic droit sur une vidéo avant de démarrer un extrait.",
       downloadFailed: "L'invite de téléchargement du navigateur n'a pas pu être ouverte."

@@ -90,6 +90,33 @@ test("content script records the selected video and exposes widget controls", ()
   assert.match(contentSource, /shadowRoot/u);
 });
 
+test("content widget uses the supplied ClipIt design tokens and component states", () => {
+  const contentSource = readText("src/content.js");
+
+  for (const token of [
+    "--color-orange-500",
+    "--color-red-500",
+    "--color-background",
+    "--color-surface",
+    "--color-text-primary",
+    "--shadow-glow",
+    "--radius-xl",
+    "--transition-normal"
+  ]) {
+    assert.match(contentSource, new RegExp(token, "u"));
+  }
+
+  for (const selector of [
+    "clipit-shell",
+    "clipit-recording-pill",
+    "clipit-primary-action",
+    "clipit-secondary-action",
+    "clipit-error-card"
+  ]) {
+    assert.match(contentSource, new RegExp(selector, "u"));
+  }
+});
+
 test("build tooling prepares browser-specific unpacked extension folders", () => {
   const packageJson = readJson("package.json");
   const buildSource = readText("scripts/build.js");
