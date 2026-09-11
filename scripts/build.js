@@ -4,7 +4,6 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const distRoot = path.join(root, "dist");
 const targets = {
-  chrome: "manifest.chrome.json",
   firefox: "manifest.firefox.json"
 };
 
@@ -37,6 +36,9 @@ function buildTarget(targetName) {
   copyFile(path.join(root, manifestFile), path.join(targetDirectory, "manifest.json"));
   copyFile(path.join(root, "README.md"), path.join(targetDirectory, "README.md"));
   fs.cpSync(path.join(root, "src"), path.join(targetDirectory, "src"), { recursive: true });
+  if (fs.existsSync(path.join(root, "icons"))) {
+    fs.cpSync(path.join(root, "icons"), path.join(targetDirectory, "icons"), { recursive: true });
+  }
 }
 
 function main() {

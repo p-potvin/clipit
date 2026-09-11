@@ -6,9 +6,19 @@
       pause: "Pause",
       resume: "Resume",
       end: "End clip",
+      cancel: "Cancel",
       recording: "Recording",
-      paused: "Paused",
+      review: "Review & Trim",
       saving: "Saving",
+      trimming: "Trimming...",
+      saveClip: "Save Clip",
+      discard: "Discard",
+      clipNameLabel: "Clip name",
+      trimIn: "In",
+      trimOut: "Out",
+      setIn: "Set In",
+      setOut: "Set Out",
+      duration: "Duration",
       errorTitle: "Error",
       captureUnsupported: "This video cannot be clipped in this browser or page.",
       noVideoSelected: "Right-click a video before starting a clip.",
@@ -20,9 +30,19 @@
       pause: "Pause",
       resume: "Reprendre",
       end: "Terminer l'extrait",
+      cancel: "Annuler",
       recording: "Enregistrement",
-      paused: "En pause",
+      review: "Aperçu et découpe",
       saving: "Enregistrement du fichier",
+      trimming: "Découpe en cours...",
+      saveClip: "Enregistrer l'extrait",
+      discard: "Supprimer",
+      clipNameLabel: "Nom de l'extrait",
+      trimIn: "Début",
+      trimOut: "Fin",
+      setIn: "Marquer début",
+      setOut: "Marquer fin",
+      duration: "Durée",
       errorTitle: "Erreur",
       captureUnsupported: "Cette vidéo ne peut pas être extraite dans ce navigateur ou sur cette page.",
       noVideoSelected: "Faites un clic droit sur une vidéo avant de démarrer un extrait.",
@@ -47,9 +67,15 @@
     return STRINGS[getLocale()] || STRINGS.en;
   }
 
-  globalScope.ClipItI18n = {
+  const ClipItI18n = {
     STRINGS,
     getLocale,
     getStrings
   };
-})(globalThis);
+
+  globalScope.ClipItI18n = ClipItI18n;
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = ClipItI18n;
+  }
+})(typeof globalThis !== "undefined" ? globalThis : window);

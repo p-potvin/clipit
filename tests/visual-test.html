@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ClipIt Vaultsqware Test - SpaceX Starship Orbital Launch</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .video-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 680px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    h1 {
+      font-size: 1.25rem;
+      margin-top: 0;
+      margin-bottom: 12px;
+      color: #f0f6fc;
+    }
+    video, canvas {
+      width: 100%;
+      border-radius: 8px;
+      background: #000;
+      display: block;
+    }
+    .controls-row {
+      margin-top: 14px;
+      display: flex;
+      gap: 12px;
+    }
+    button.btn-test {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.btn-test:hover {
+      background: #2ea043;
+    }
+  </style>
+  <script src="../src/i18n.js"></script>
+  <script src="../src/styles.js"></script>
+  <script src="../src/smartname.js"></script>
+  <script src="../src/trimmer.js"></script>
+  <script src="../src/widget.js"></script>
+</head>
+<body>
+  <div class="video-card">
+    <h1>SpaceX Starship Orbital Launch - YouTube</h1>
+    <canvas id="anim-canvas" width="640" height="360"></canvas>
+    <div class="controls-row">
+      <button class="btn-test" id="btn-show-recording">Simulate Live Recording</button>
+      <button class="btn-test" id="btn-show-trim">Simulate Review &amp; Trim</button>
+    </div>
+  </div>
+
+  <script>
+    // Animate canvas to simulate live video
+    const canvas = document.getElementById("anim-canvas");
+    const ctx = canvas.getContext("2d");
+    let frame = 0;
+
+    function draw() {
+      frame++;
+      ctx.fillStyle = "#050811";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 50; i++) {
+        const x = (Math.sin(i * 99 + frame * 0.001) * 0.5 + 0.5) * canvas.width;
+        const y = (Math.cos(i * 33 + frame * 0.001) * 0.5 + 0.5) * canvas.height;
+        ctx.fillRect(x, y, 2, 2);
+      }
+
+      // Rocket flame
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2 + Math.sin(frame * 0.05) * 15;
+
+      ctx.fillStyle = "#6e7bf2";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 35, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#ff8a6b";
+      ctx.beginPath();
+      ctx.arc(cx, cy + 30, 20 + Math.sin(frame * 0.2) * 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Timecode
+      ctx.fillStyle = "#edece8";
+      ctx.font = "16px monospace";
+      ctx.fillText("T+ 00:" + String(Math.floor(frame / 60)).padStart(2, "0") + ":" + String(frame % 60).padStart(2, "0"), 20, 30);
+
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    const strings = window.ClipItI18n.getStrings();
+    let activeWidget = null;
+
+    function createDummyBlob() {
+      // Create a 5-second video blob from canvas stream
+      return new Promise((resolve) => {
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+        recorder.start();
+        setTimeout(() => recorder.stop(), 500);
+      });
+    }
+
+    document.getElementById("btn-show-recording").addEventListener("click", () => {
+      if (activeWidget) activeWidget.destroy();
+      activeWidget = window.ClipItWidget.createClipItWidget(strings);
+      const defaultName = window.ClipItSmartName.generateDefaultName(document.title);
+      activeWidget.setFilename(defaultName);
+      activeWidget.setRecordingState();
+      activeWidget.updateTimer(4200); // 00:04
+    });
+
+    document.getElementById("btn-show-trim").addEventListener("click", async () => {
+      if (activeWidget) activeWidget.destroy();
+      activeWidget = window.ClipItWidget.createClipItWidget(strings);
+      const defaultName = window.ClipItSmartName.generateDefaultName(document.title);
+      activeWidget.setFilename(defaultName);
+      const blob = await createDummyBlob();
+      activeWidget.setReviewState(blob, 14.5);
+    });
+
+    // Auto trigger recording state initially
+    setTimeout(() => {
+      document.getElementById("btn-show-recording").click();
+    }, 200);
+  </script>
+</body>
+</html>

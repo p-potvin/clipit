@@ -1,11 +1,10 @@
 {
   "name": "clipit",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "Cross-browser WebExtension for clipping the currently selected video.",
+  "description": "Firefox WebExtension for clipping and trimming ongoing videos with smart naming and vaultsqware styling.",
   "scripts": {
-    "build": "node scripts/build.js all",
-    "build:chrome": "node scripts/build.js chrome",
+    "build": "node scripts/build.js firefox",
     "build:firefox": "node scripts/build.js firefox",
     "test": "node --test"
   }

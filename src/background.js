@@ -6,13 +6,15 @@ const CLIPIT_MENU_ID = "clipit-start-clip";
 const api = globalThis.browser || globalThis.chrome;
 
 function createContextMenu() {
+  const strings = globalThis.ClipItI18n ? globalThis.ClipItI18n.getStrings() : { menuStartClip: "Start clip" };
+
   api.contextMenus.remove(CLIPIT_MENU_ID, () => {
     const lastError = api.runtime.lastError;
     void lastError;
 
     api.contextMenus.create({
       id: CLIPIT_MENU_ID,
-      title: globalThis.ClipItI18n.getStrings().menuStartClip,
+      title: strings.menuStartClip,
       contexts: ["video"]
     });
   });
@@ -24,7 +26,8 @@ function sendStartMessage(info, tab) {
   }
 
   const message = {
-    type: "CLIPIT_START_RECORDING"
+    type: "CLIPIT_START_RECORDING",
+    tabTitle: (tab && tab.title) || ""
   };
 
   const options = typeof info.frameId === "number" ? { frameId: info.frameId } : undefined;
@@ -35,7 +38,7 @@ function sendStartMessage(info, tab) {
 }
 
 function downloadClip(request, sendResponse) {
-  const filename = request.filename || "clipit.webm";
+  const filename = request.filename || "clip.webm";
 
   api.downloads.download(
     {
@@ -59,6 +62,7 @@ function downloadClip(request, sendResponse) {
 api.runtime.onInstalled.addListener(createContextMenu);
 api.runtime.onStartup.addListener(createContextMenu);
 api.contextMenus.onClicked.addListener(sendStartMessage);
+
 api.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (!request || request.type !== "CLIPIT_DOWNLOAD") {
     return false;

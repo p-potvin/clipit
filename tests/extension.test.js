@@ -13,119 +13,164 @@ function readText(filePath) {
   return fs.readFileSync(path.join(root, filePath), "utf8");
 }
 
-test("browser manifests expose the video context menu extension surface", () => {
-  const chromeManifest = readJson("manifest.chrome.json");
+test("Firefox manifest exposes MV3, Gecko settings, SVG icons and modular scripts", () => {
+  const manifest = readJson("manifest.json");
   const firefoxManifest = readJson("manifest.firefox.json");
 
-  assert.equal(chromeManifest.background.service_worker, "src/background.js");
-  assert.equal(chromeManifest.background.scripts, undefined);
+  assert.deepEqual(manifest, firefoxManifest);
+  assert.equal(manifest.manifest_version, 3);
+  assert.match(manifest.name, /ClipIt/);
+  assert.ok(manifest.permissions.includes("contextMenus"));
+  assert.ok(manifest.permissions.includes("downloads"));
+  assert.ok(manifest.permissions.includes("activeTab"));
 
-  assert.deepEqual(firefoxManifest.background.scripts, ["src/i18n.js", "src/background.js"]);
+  // Firefox MV3 background
+  assert.deepEqual(manifest.background.scripts, ["src/i18n.js", "src/background.js"]);
 
-  for (const manifest of [chromeManifest, firefoxManifest]) {
-    assert.equal(manifest.manifest_version, 3);
-    assert.match(manifest.name, /ClipIt/);
-    assert.ok(manifest.permissions.includes("contextMenus"));
-    assert.ok(manifest.permissions.includes("downloads"));
-    assert.deepEqual(manifest.content_scripts[0].matches, ["<all_urls>"]);
-    assert.deepEqual(manifest.content_scripts[0].js, ["src/i18n.js", "src/content.js"]);
+  // Content scripts order
+  assert.deepEqual(manifest.content_scripts[0].js, [
+    "src/i18n.js",
+    "src/smartname.js",
+    "src/trimmer.js",
+    "src/styles.js",
+    "src/widget.js",
+    "src/content.js"
+  ]);
+
+  // Gecko ID, min version, and data collection permissions
+  assert.equal(manifest.browser_specific_settings.gecko.id, "clipit@vaultwares.local");
+  assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, "140.0");
+  assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions, {
+    required: ["none"]
+  });
+
+  // SVG Icon definitions
+  assert.equal(manifest.icons["128"], "icons/icon.svg");
+  assert.equal(manifest.action.default_icon, "icons/icon.svg");
+  assert.ok(fs.existsSync(path.join(root, "icons", "icon.svg")));
+});
+
+test("i18n strings cover English and Quebec French labels for clipping and trimming", () => {
+  const i18n = require("../src/i18n.js");
+  const i18nModule = globalThis.ClipItI18n;
+
+  for (const lang of ["en", "qc"]) {
+    const s = i18nModule.STRINGS[lang];
+    assert.ok(s);
+    assert.ok(s.menuStartClip);
+    assert.ok(s.widgetTitle);
+    assert.ok(s.end);
+    assert.ok(s.cancel);
+    assert.ok(s.recording);
+    assert.ok(s.review);
+    assert.ok(s.saveClip);
+    assert.ok(s.discard);
+    assert.ok(s.clipNameLabel);
+    assert.ok(s.trimIn);
+    assert.ok(s.trimOut);
+    assert.ok(s.setIn);
+    assert.ok(s.setOut);
+    assert.ok(s.errorTitle);
+    assert.ok(s.captureUnsupported);
+    assert.ok(s.noVideoSelected);
   }
 
-  assert.equal(firefoxManifest.browser_specific_settings.gecko.id, "clipit@vaultwares.local");
+  assert.match(i18nModule.STRINGS.qc.menuStartClip, /Démarrer/);
+  assert.match(i18nModule.STRINGS.qc.review, /Aperçu/);
 });
 
-test("root manifest defaults to the Firefox manifest", () => {
-  const defaultManifest = readJson("manifest.json");
-  const firefoxManifest = readJson("manifest.firefox.json");
+test("smartname module sanitizes tab titles and formats default webm filenames", () => {
+  const smartName = require("../src/smartname.js");
 
-  assert.deepEqual(defaultManifest, firefoxManifest);
+  // Title sanitization tests
+  assert.equal(smartName.sanitizeTitle("NASA Live: Artemis Mission - YouTube"), "NASA-Live-Artemis-Mission");
+  assert.equal(smartName.sanitizeTitle("Gaming Stream | Twitch"), "Gaming-Stream");
+  assert.equal(smartName.sanitizeTitle("Illegal / : * ? \" < > | Characters"), "Illegal-Characters");
+  assert.equal(smartName.sanitizeTitle("   Multiple   Spaces   and --- dashes   "), "Multiple-Spaces-and-dashes");
+  assert.equal(smartName.sanitizeTitle(""), "clip");
+  assert.equal(smartName.sanitizeTitle(null), "clip");
+
+  // Filename generator tests
+  const sampleName = smartName.generateDefaultName("Rocket Launch - YouTube", "2026-09-10_23-30-00");
+  assert.equal(sampleName, "Rocket-Launch-2026-09-10_23-30-00");
+
+  // WebM extension enforcement
+  assert.equal(smartName.ensureWebmExtension("my-cool-clip"), "my-cool-clip.webm");
+  assert.equal(smartName.ensureWebmExtension("my-cool-clip.webm"), "my-cool-clip.webm");
+  assert.equal(smartName.ensureWebmExtension("my-cool-clip.WEBM"), "my-cool-clip.WEBM");
+  assert.equal(smartName.ensureWebmExtension("bad/name:here"), "bad-name-here.webm");
+  assert.equal(smartName.ensureWebmExtension(""), "clip.webm");
 });
 
-test("i18n strings cover English and Quebec French user-facing labels", () => {
-  const i18nSource = readText("src/i18n.js");
+test("vaultsqware styles export obsidian, warm bone, iris, coral tokens and hardware LEDs", () => {
+  const styles = require("../src/styles.js");
+  const css = globalThis.ClipItStyles.VAULTSQWARE_CSS;
 
-  for (const key of [
-    "menuStartClip",
-    "widgetTitle",
-    "pause",
-    "resume",
-    "end",
-    "recording",
-    "paused",
-    "saving",
-    "captureUnsupported",
-    "noVideoSelected"
-  ]) {
-    assert.match(i18nSource, new RegExp(`${key}:`, "u"));
-  }
+  // Vaultsqware core tokens
+  assert.match(css, /--vwsq-console-bg:\s*#0a0c11/);
+  assert.match(css, /--vwsq-console-surface:\s*#11141b/);
+  assert.match(css, /--vwsq-console-raised:\s*#191d27/);
+  assert.match(css, /--vwsq-warm-bg:\s*#edece8/);
+  assert.match(css, /--vwsq-warm-ink:\s*#0f1116/);
+  assert.match(css, /--vwsq-iris-500:\s*#6e7bf2/);
+  assert.match(css, /--vwsq-coral-500:\s*#ff8a6b/);
+  assert.match(css, /--vwsq-signal-alert:\s*#f45d6b/);
 
-  assert.match(i18nSource, /en:\s*\{/u);
-  assert.match(i18nSource, /qc:\s*\{/u);
-  assert.match(i18nSource, /D.marrer l.extrait/u);
+  // Hardware LED & Dual-region components
+  assert.match(css, /\.vwsq-console-shell/);
+  assert.match(css, /\.vwsq-warm-badge/);
+  assert.match(css, /\.vwsq-led/);
+  assert.match(css, /@keyframes vwsqLedPulse/);
+  assert.match(css, /\.clipit-preview-video/);
+  assert.match(css, /\.clipit-range/);
 });
 
-test("background creates one video-only Start Clip context menu and download handler", () => {
+test("background script forwards tab title and registers video context menu", () => {
   const backgroundSource = readText("src/background.js");
 
-  assert.match(backgroundSource, /CLIPIT_MENU_ID\s*=\s*"clipit-start-clip"/u);
-  assert.match(backgroundSource, /contexts:\s*\["video"\]/u);
-  assert.match(backgroundSource, /CLIPIT_START_RECORDING/u);
-  assert.match(backgroundSource, /CLIPIT_DOWNLOAD/u);
-  assert.match(backgroundSource, /\.downloads\.download/u);
+  assert.match(backgroundSource, /CLIPIT_MENU_ID\s*=\s*"clipit-start-clip"/);
+  assert.match(backgroundSource, /contexts:\s*\["video"\]/);
+  assert.match(backgroundSource, /tabTitle:\s*\(tab\s*&&\s*tab\.title\)\s*\|\|\s*""/);
+  assert.match(backgroundSource, /CLIPIT_START_RECORDING/);
+  assert.match(backgroundSource, /CLIPIT_DOWNLOAD/);
+  assert.match(backgroundSource, /api\.downloads\.download/);
 });
 
-test("content script records the selected video and exposes widget controls", () => {
+test("content script coordinates ongoing video capture, trimming, and smartnaming without pausing", () => {
   const contentSource = readText("src/content.js");
 
-  assert.match(contentSource, /contextmenu/u);
-  assert.match(contentSource, /HTMLVideoElement/u);
-  assert.match(contentSource, /captureStream/u);
-  assert.match(contentSource, /mozCaptureStream/u);
-  assert.match(contentSource, /MediaRecorder/u);
-  assert.match(contentSource, /pauseRecording/u);
-  assert.match(contentSource, /resumeRecording/u);
-  assert.match(contentSource, /stopRecording/u);
-  assert.match(contentSource, /clipit-\$\{stamp\}\.webm/u);
-  assert.match(contentSource, /CLIPIT_DOWNLOAD/u);
-  assert.match(contentSource, /shadowRoot/u);
+  // No pause logic
+  assert.doesNotMatch(contentSource, /pauseRecording/);
+  assert.doesNotMatch(contentSource, /resumeRecording/);
+
+  // Essential video capture and trim triggers
+  assert.match(contentSource, /HTMLVideoElement/);
+  assert.match(contentSource, /captureStream/);
+  assert.match(contentSource, /mozCaptureStream/);
+  assert.match(contentSource, /MediaRecorder/);
+  assert.match(contentSource, /trimWebmBlob/);
+  assert.match(contentSource, /generateDefaultName/);
+  assert.match(contentSource, /ensureWebmExtension/);
+  assert.match(contentSource, /setReviewState/);
+  assert.match(contentSource, /setSavingState/);
 });
 
-test("content widget uses the supplied ClipIt design tokens and component states", () => {
-  const contentSource = readText("src/content.js");
+test("trimmer module provides mime detection and duration utilities", () => {
+  const trimmer = require("../src/trimmer.js");
+  const trimmerModule = globalThis.ClipItTrimmer;
 
-  for (const token of [
-    "--color-orange-500",
-    "--color-red-500",
-    "--color-background",
-    "--color-surface",
-    "--color-text-primary",
-    "--shadow-glow",
-    "--radius-xl",
-    "--transition-normal"
-  ]) {
-    assert.match(contentSource, new RegExp(token, "u"));
-  }
-
-  for (const selector of [
-    "clipit-shell",
-    "clipit-recording-pill",
-    "clipit-primary-action",
-    "clipit-secondary-action",
-    "clipit-error-card"
-  ]) {
-    assert.match(contentSource, new RegExp(selector, "u"));
-  }
+  assert.ok(typeof trimmerModule.getSupportedMimeType === "function");
+  assert.ok(typeof trimmerModule.getVideoDuration === "function");
+  assert.ok(typeof trimmerModule.trimWebmBlob === "function");
+  assert.match(trimmerModule.getSupportedMimeType(), /video\/webm/);
 });
 
-test("build tooling prepares browser-specific unpacked extension folders", () => {
-  const packageJson = readJson("package.json");
+test("build tooling packages extension for Firefox with icons and modular src", () => {
   const buildSource = readText("scripts/build.js");
+  const packageJson = readJson("package.json");
 
-  assert.equal(packageJson.scripts["build:chrome"], "node scripts/build.js chrome");
   assert.equal(packageJson.scripts["build:firefox"], "node scripts/build.js firefox");
-  assert.equal(packageJson.scripts.build, "node scripts/build.js all");
-  assert.match(buildSource, /manifest\.chrome\.json/u);
-  assert.match(buildSource, /manifest\.firefox\.json/u);
-  assert.match(buildSource, /dist/u);
-  assert.match(buildSource, /manifest\.json/u);
+  assert.match(buildSource, /manifest\.firefox\.json/);
+  assert.match(buildSource, /icons/);
+  assert.match(buildSource, /src/);
 });
