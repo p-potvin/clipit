@@ -13,7 +13,53 @@
     if (target instanceof HTMLVideoElement) {
       return target;
     }
-    return target && typeof target.closest === "function" ? target.closest("video") : null;
+
+    // Penetrate overlay divs, custom controls, and player layers
+    if (typeof document.elementsFromPoint === "function" && event.clientX && event.clientY) {
+      try {
+        const elements = document.elementsFromPoint(event.clientX, event.clientY);
+        for (const el of elements) {
+          if (el instanceof HTMLVideoElement) {
+            return el;
+          }
+          if (el && typeof el.querySelector === "function") {
+            const nested = el.querySelector("video");
+            if (nested instanceof HTMLVideoElement) {
+              return nested;
+            }
+          }
+        }
+      } catch (_e) {}
+    }
+
+    if (target && typeof target.closest === "function") {
+      const closest = target.closest("video");
+      if (closest) return closest;
+    }
+
+    if (target && typeof target.querySelector === "function") {
+      const child = target.querySelector("video");
+      if (child instanceof HTMLVideoElement) return child;
+    }
+
+    if (target && target.parentElement && typeof target.parentElement.querySelector === "function") {
+      const sibling = target.parentElement.querySelector("video");
+      if (sibling instanceof HTMLVideoElement) return sibling;
+    }
+
+    return null;
+  }
+
+  function getBestVideoOnPage() {
+    const allVideos = Array.from(document.querySelectorAll("video"));
+    if (allVideos.length === 0) return null;
+
+    // Prefer currently playing video
+    const playing = allVideos.find((v) => !v.paused && v.readyState > 1);
+    if (playing) return playing;
+
+    // Otherwise pick largest visible video
+    return allVideos.sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight))[0];
   }
 
   document.addEventListener(
@@ -59,19 +105,37 @@
   }
 
   async function downloadClipBlob(blob, filename) {
+    let dataUrl = "";
     try {
-      const dataUrl = await blobToDataUrl(blob);
-      const response = await api.runtime.sendMessage({
+      dataUrl = await blobToDataUrl(blob);
+    } catch (_e) {}
+
+    let response;
+    try {
+      response = await api.runtime.sendMessage({
         type: "CLIPIT_DOWNLOAD",
         filename,
-        dataUrl
+        dataUrl,
+        blob
       });
-
-      if (!response || response.ok !== true) {
-        throw new Error(response && response.error ? response.error : strings.downloadFailed);
+    } catch (_msgErr) {
+      try {
+        response = await api.runtime.sendMessage({
+          type: "CLIPIT_DOWNLOAD",
+          filename,
+          dataUrl
+        });
+      } catch (err2) {
+        response = { ok: false, error: err2 && err2.message ? err2.message : strings.downloadFailed };
       }
-    } catch (_error) {
-      fallbackToAnchor(blob, filename);
+    }
+
+    if (!response || response.ok !== true) {
+      const errorMsg = response && response.error ? response.error : strings.downloadFailed;
+      try {
+        fallbackToAnchor(blob, filename);
+      } catch (_e) {}
+      throw new Error(errorMsg);
     }
   }
 
@@ -163,12 +227,10 @@
 
           const finalFilename = smartName.ensureWebmExtension(widget.getFilename());
           await downloadClipBlob(processedBlob, finalFilename);
-        } catch (_err) {
-          const finalFilename = smartName.ensureWebmExtension(widget.getFilename());
-          fallbackToAnchor(rawBlob, finalFilename);
-        } finally {
           widget.destroy();
           activeSession = null;
+        } catch (err) {
+          widget.setErrorState(strings.errorTitle, err && err.message ? err.message : strings.downloadFailed);
         }
       };
     });
@@ -188,6 +250,10 @@
   function startRecording(tabTitle) {
     if (activeSession) {
       activeSession.finishRecording();
+    }
+
+    if (!(selectedVideo instanceof HTMLVideoElement) || !document.contains(selectedVideo)) {
+      selectedVideo = getBestVideoOnPage();
     }
 
     if (!(selectedVideo instanceof HTMLVideoElement)) {

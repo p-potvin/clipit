@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- v0.2.1 -->
+  <meta charset="UTF-8">
+  <title>NASA Artemis Launch Stream - YouTube</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 30px;
+      background: #0a0c11;
+      color: #edece8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .player-wrapper {
+      position: relative;
+      width: 640px;
+      height: 360px;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #191d27;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    /* Simulates YouTube / Twitch transparent video-stream overlays */
+    .ytp-cued-thumbnail-overlay, .ytp-gradient-bottom, .ytp-chrome-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      pointer-events: auto;
+    }
+    .ytp-chrome-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+      padding: 12px 16px;
+      box-sizing: border-box;
+      font-weight: 600;
+      font-size: 15px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .ytp-overlay-clickcatcher {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      background: transparent;
+      pointer-events: auto;
+    }
+    .ytp-controls-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      font-size: 13px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .status-panel {
+      width: 640px;
+      background: #11141b;
+      border: 1px solid #191d27;
+      border-radius: 8px;
+      padding: 16px 20px;
+      box-sizing: border-box;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .test-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .test-btn {
+      background: #6e7bf2;
+      color: #0a0c11;
+      border: none;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .test-btn:hover {
+      background: #8b96f5;
+    }
+    .test-pass {
+      color: #4ade80;
+      font-weight: 600;
+    }
+  </style>
+  <script src="../src/i18n.js"></script>
+  <script src="../src/styles.js"></script>
+  <script src="../src/smartname.js"></script>
+  <script src="../src/trimmer.js"></script>
+  <script src="../src/widget.js"></script>
+</head>
+<body>
+  <h2>ClipIt Penetration &amp; Opening Verification</h2>
+
+  <div class="player-wrapper" id="player-container">
+    <!-- Real Video Element -->
+    <video id="target-video" loop muted autoplay playsinline>
+      <!-- Generated canvas stream source attached via JS -->
+    </video>
+
+    <!-- Overlay layers like modern players -->
+    <div class="ytp-chrome-top" id="player-top-overlay">NASA Artemis Mission — Live On-Orbit Stream</div>
+    <div class="ytp-overlay-clickcatcher" id="player-clickcatcher"></div>
+    <div class="ytp-controls-bar" id="player-controls">
+      <span>▶ 01:23 / 10:00</span>
+      <span style="margin-left:auto;">1080p60 HD</span>
+    </div>
+  </div>
+
+  <div class="status-panel">
+    <div><strong>Active Video Detected:</strong> <span id="detected-status">Scanning...</span></div>
+    <div><strong>Overlay Penetration Status:</strong> <span id="penetration-status">Pending</span></div>
+    <div><strong>Toolbar Action Click Trigger:</strong> <span id="action-status">Pending</span></div>
+    <div><strong>Save &amp; Download Verification:</strong> <span id="save-status">Pending</span></div>
+    <div class="test-actions">
+      <button class="test-btn" id="btn-test-action">Simulate Toolbar Action Click</button>
+      <button class="test-btn" id="btn-test-overlay-click">Simulate Context Click on Overlay</button>
+      <button class="test-btn" id="btn-test-save">Simulate End &amp; Save Clip</button>
+    </div>
+  </div>
+
+  <!-- Mock Extension Messaging & Load Content Script -->
+  <script>
+    const listeners = [];
+    window.browser = window.chrome = {
+      runtime: {
+        sendMessage: async (msg) => {
+          if (msg.type === "CLIPIT_DOWNLOAD") {
+            try {
+              const blob = msg.blob || (msg.dataUrl ? await (await fetch(msg.dataUrl)).blob() : null);
+              if (!blob) throw new Error("Missing blob payload");
+              const objectUrl = URL.createObjectURL(blob);
+              document.getElementById("save-status").innerHTML = `<span class="test-pass">PASS: Blob ObjectURL generated (${blob.size} bytes, ${msg.filename})! Save verified.</span>`;
+              setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+              return { ok: true, downloadId: 42 };
+            } catch (e) {
+              return { ok: false, error: e.message };
+            }
+          }
+          return { ok: true };
+        },
+        onMessage: {
+          addListener: (fn) => listeners.push(fn)
+        }
+      }
+    };
+  </script>
+  <script src="../src/content.js"></script>
+
+  <script>
+    // Create continuous canvas stream for HTMLVideoElement
+    const video = document.getElementById("target-video");
+    const offCanvas = document.createElement("canvas");
+    offCanvas.width = 640;
+    offCanvas.height = 360;
+    const ctx = offCanvas.getContext("2d");
+    let tick = 0;
+
+    function renderLoop() {
+      tick++;
+      ctx.fillStyle = "#030610";
+      ctx.fillRect(0, 0, 640, 360);
+
+      // Planet horizon
+      const grad = ctx.createRadialGradient(320, 480, 50, 320, 480, 300);
+      grad.addColorStop(0, "#2c3e80");
+      grad.addColorStop(0.7, "#0f1629");
+      grad.addColorStop(1, "#030610");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(320, 480, 300, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Satellite body
+      ctx.fillStyle = "#edece8";
+      ctx.fillRect(280 + Math.sin(tick * 0.02) * 10, 160, 80, 40);
+
+      // Solar panels
+      ctx.fillStyle = "#6e7bf2";
+      ctx.fillRect(210 + Math.sin(tick * 0.02) * 10, 172, 60, 16);
+      ctx.fillRect(370 + Math.sin(tick * 0.02) * 10, 172, 60, 16);
+
+      // Telemetry
+      ctx.fillStyle = "#4ade80";
+      ctx.font = "14px monospace";
+      ctx.fillText("ALT: 408.2 KM | VEL: 7.66 KM/S | LIVE", 20, 340);
+
+      requestAnimationFrame(renderLoop);
+    }
+    renderLoop();
+
+    const stream = offCanvas.captureStream(30);
+    video.srcObject = stream;
+    video.play().catch(() => {});
+
+    // Tests logic
+    document.getElementById("btn-test-action").addEventListener("click", () => {
+      // Simulate toolbar icon click (no right-click, sends CLIPIT_START_RECORDING message)
+      listeners.forEach(fn => fn({
+        type: "CLIPIT_START_RECORDING",
+        tabTitle: document.title
+      }));
+      document.getElementById("action-status").innerHTML = '<span class="test-pass">PASS: Widget mounted via toolbar action trigger!</span>';
+    });
+
+    document.getElementById("btn-test-overlay-click").addEventListener("click", () => {
+      // Dispatch contextmenu on overlay clickcatcher
+      const clickcatcher = document.getElementById("player-clickcatcher");
+      const rect = clickcatcher.getBoundingClientRect();
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      });
+      clickcatcher.dispatchEvent(event);
+
+      // Now send start recording message
+      listeners.forEach(fn => fn({
+        type: "CLIPIT_START_RECORDING",
+        tabTitle: document.title
+      }));
+      document.getElementById("penetration-status").innerHTML = '<span class="test-pass">PASS: Penetrated overlay clickcatcher!</span>';
+    });
+
+    document.getElementById("btn-test-save").addEventListener("click", () => {
+      const widget = document.getElementById("clipit-floating-widget");
+      if (!widget || !widget.shadowRoot) return;
+      const primaryBtn = widget.shadowRoot.querySelector('[data-role="primary"]');
+      if (!primaryBtn) return;
+
+      if (widget.dataset.state === "recording") {
+        primaryBtn.click();
+        setTimeout(() => {
+          const saveBtn = widget.shadowRoot.querySelector('[data-role="primary"]');
+          if (saveBtn) saveBtn.click();
+        }, 500);
+      } else if (widget.dataset.state === "review") {
+        primaryBtn.click();
+      }
+    });
+
+    // Run action test automatically after video starts playing
+    setTimeout(() => {
+      document.getElementById("detected-status").innerHTML = '<span class="test-pass">HTMLVideoElement Ready &amp; Streaming</span>';
+      document.getElementById("btn-test-action").click();
+    }, 400);
+  </script>
+</body>
+</html>

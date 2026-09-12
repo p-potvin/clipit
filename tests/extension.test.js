@@ -125,26 +125,35 @@ test("vaultsqware styles export obsidian, warm bone, iris, coral tokens and hard
   assert.match(css, /\.clipit-range/);
 });
 
-test("background script forwards tab title and registers video context menu", () => {
+test("background script forwards tab title and registers video context menu and toolbar action", () => {
   const backgroundSource = readText("src/background.js");
 
   assert.match(backgroundSource, /CLIPIT_MENU_ID\s*=\s*"clipit-start-clip"/);
-  assert.match(backgroundSource, /contexts:\s*\["video"\]/);
+  assert.match(backgroundSource, /contexts:\s*\[[^\]]*"video"[^\]]*\]/);
+  assert.match(backgroundSource, /contexts:\s*\[[^\]]*"page"[^\]]*\]/);
   assert.match(backgroundSource, /tabTitle:\s*\(tab\s*&&\s*tab\.title\)\s*\|\|\s*""/);
+  assert.match(backgroundSource, /actionApi\.onClicked\.addListener/);
   assert.match(backgroundSource, /CLIPIT_START_RECORDING/);
   assert.match(backgroundSource, /CLIPIT_DOWNLOAD/);
+  assert.match(backgroundSource, /toBlob/);
+  assert.match(backgroundSource, /URL\.createObjectURL/);
+  assert.match(backgroundSource, /URL\.revokeObjectURL/);
   assert.match(backgroundSource, /api\.downloads\.download/);
+  assert.match(backgroundSource, /saveAs:\s*true/);
+  assert.match(backgroundSource, /conflictAction:\s*"uniquify"/);
 });
 
-test("content script coordinates ongoing video capture, trimming, and smartnaming without pausing", () => {
+test("content script coordinates ongoing video capture, overlay penetration, and smartnaming without pausing", () => {
   const contentSource = readText("src/content.js");
 
   // No pause logic
   assert.doesNotMatch(contentSource, /pauseRecording/);
   assert.doesNotMatch(contentSource, /resumeRecording/);
 
-  // Essential video capture and trim triggers
+  // Essential video capture, overlay penetration and trim triggers
   assert.match(contentSource, /HTMLVideoElement/);
+  assert.match(contentSource, /elementsFromPoint/);
+  assert.match(contentSource, /getBestVideoOnPage/);
   assert.match(contentSource, /captureStream/);
   assert.match(contentSource, /mozCaptureStream/);
   assert.match(contentSource, /MediaRecorder/);

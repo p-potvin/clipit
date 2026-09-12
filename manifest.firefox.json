@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ClipIt Video Clipper",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Capture and trim clips from ongoing videos with smart naming and Obsidian & Iris styling.",
   "permissions": ["contextMenus", "downloads", "activeTab"],
   "icons": {
