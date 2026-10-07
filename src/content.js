@@ -1,6 +1,6 @@
 (function installClipItContent(globalScope) {
   const api = globalScope.browser || globalScope.chrome;
-  const strings = globalScope.ClipItI18n.getStrings();
+  const strings = globalScope.ClipItI18n?.getStrings() || {};
   const smartName = globalScope.ClipItSmartName;
   const trimmer = globalScope.ClipItTrimmer;
   const widgetFactory = globalScope.ClipItWidget;
@@ -10,56 +10,31 @@
 
   function findVideoFromEvent(event) {
     const target = event.target;
-    if (target instanceof HTMLVideoElement) {
-      return target;
-    }
+    if (target instanceof HTMLVideoElement) return target;
 
-    // Penetrate overlay divs, custom controls, and player layers
-    if (typeof document.elementsFromPoint === "function" && event.clientX && event.clientY) {
-      try {
-        const elements = document.elementsFromPoint(event.clientX, event.clientY);
-        for (const el of elements) {
-          if (el instanceof HTMLVideoElement) {
-            return el;
-          }
-          if (el && typeof el.querySelector === "function") {
-            const nested = el.querySelector("video");
-            if (nested instanceof HTMLVideoElement) {
-              return nested;
-            }
-          }
-        }
-      } catch (_e) {}
-    }
-
+    // Direct ancestor check
     if (target && typeof target.closest === "function") {
-      const closest = target.closest("video");
-      if (closest) return closest;
+      const parentVideo = target.closest("video");
+      if (parentVideo) return parentVideo;
     }
 
-    if (target && typeof target.querySelector === "function") {
-      const child = target.querySelector("video");
-      if (child instanceof HTMLVideoElement) return child;
+    // Overlay piercing: check underneath cursor coordinates
+    if (event.clientX !== undefined && event.clientY !== undefined) {
+      const elements = document.elementsFromPoint(event.clientX, event.clientY);
+      for (const el of elements) {
+        if (el instanceof HTMLVideoElement) return el;
+        const nested = el.querySelector("video");
+        if (nested instanceof HTMLVideoElement) return nested;
+      }
     }
 
-    if (target && target.parentElement && typeof target.parentElement.querySelector === "function") {
-      const sibling = target.parentElement.querySelector("video");
-      if (sibling instanceof HTMLVideoElement) return sibling;
+    // Fallback: check DOM container siblings/children
+    if (target && target.parentElement) {
+      const siblingVideo = target.parentElement.querySelector("video");
+      if (siblingVideo instanceof HTMLVideoElement) return siblingVideo;
     }
 
     return null;
-  }
-
-  function getBestVideoOnPage() {
-    const allVideos = Array.from(document.querySelectorAll("video"));
-    if (allVideos.length === 0) return null;
-
-    // Prefer currently playing video
-    const playing = allVideos.find((v) => !v.paused && v.readyState > 1);
-    if (playing) return playing;
-
-    // Otherwise pick largest visible video
-    return allVideos.sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight))[0];
   }
 
   document.addEventListener(
@@ -74,22 +49,18 @@
   );
 
   function getVideoStream(video) {
+    let stream = null;
     if (typeof video.captureStream === "function") {
-      return video.captureStream();
+      stream = video.captureStream();
+    } else if (typeof video.mozCaptureStream === "function") {
+      stream = video.mozCaptureStream();
     }
-    if (typeof video.mozCaptureStream === "function") {
-      return video.mozCaptureStream();
-    }
-    throw new Error(strings.captureUnsupported);
-  }
 
-  function blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => resolve(reader.result));
-      reader.addEventListener("error", () => reject(reader.error));
-      reader.readAsDataURL(blob);
-    });
+    if (!stream) {
+      throw new Error(strings.captureUnsupported || "Stream capture unsupported");
+    }
+
+    return stream;
   }
 
   function fallbackToAnchor(blob, filename) {
@@ -101,59 +72,56 @@
     document.documentElement.append(link);
     link.click();
     link.remove();
-    globalScope.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    globalScope.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result));
+      reader.addEventListener("error", () => reject(reader.error));
+      reader.readAsDataURL(blob);
+    });
   }
 
   async function downloadClipBlob(blob, filename) {
-    let dataUrl = "";
-    try {
-      dataUrl = await blobToDataUrl(blob);
-    } catch (_e) {}
+    // Large blobs (>30MB) frequently crash extension IPC via base64 serialization
+    const MAX_IPC_BLOB_SIZE = 30 * 1024 * 1024;
 
-    let response;
-    try {
-      response = await api.runtime.sendMessage({
-        type: "CLIPIT_DOWNLOAD",
-        filename,
-        dataUrl,
-        blob
-      });
-    } catch (_msgErr) {
+    if (blob.size < MAX_IPC_BLOB_SIZE && api?.runtime?.sendMessage) {
       try {
-        response = await api.runtime.sendMessage({
+        const dataUrl = await blobToDataUrl(blob);
+        const response = await api.runtime.sendMessage({
           type: "CLIPIT_DOWNLOAD",
           filename,
           dataUrl
         });
-      } catch (err2) {
-        response = { ok: false, error: err2 && err2.message ? err2.message : strings.downloadFailed };
+
+        if (response && response.ok === true) return;
+      } catch (_error) {
+        // Fall back to direct DOM anchor download on IPC or serialization failure
       }
     }
 
-    if (!response || response.ok !== true) {
-      const errorMsg = response && response.error ? response.error : strings.downloadFailed;
-      try {
-        fallbackToAnchor(blob, filename);
-      } catch (_e) {}
-      throw new Error(errorMsg);
-    }
+    fallbackToAnchor(blob, filename);
   }
 
   function showError(message) {
     const widget = widgetFactory.createClipItWidget(strings);
-    widget.setErrorState(strings.errorTitle, message);
+    widget.setErrorState(strings.errorTitle || "Error", message);
   }
 
   function createSession(video, tabTitle) {
     const stream = getVideoStream(video);
-    const mimeType = trimmer.getSupportedMimeType();
-    const options = mimeType ? { mimeType } : undefined;
+    const mimeType = trimmer?.getSupportedMimeType?.() || "video/webm;codecs=vp9,opus";
+    const options = MediaRecorder.isTypeSupported(mimeType) ? { mimeType } : undefined;
+    
     const recorder = new MediaRecorder(stream, options);
     const chunks = [];
     const widget = widgetFactory.createClipItWidget(strings);
 
     const initialTitle = tabTitle || document.title || "video";
-    const defaultName = smartName.generateDefaultName(initialTitle);
+    const defaultName = smartName ? smartName.generateDefaultName(initialTitle) : initialTitle;
     widget.setFilename(defaultName);
 
     let startedAt = performance.now();
@@ -170,14 +138,19 @@
     timerId = globalScope.setInterval(updateTimer, 200);
     updateTimer();
 
+    function stopTracks() {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
     function cancelSession() {
       if (isStopped) return;
       isStopped = true;
       globalScope.clearInterval(timerId);
+
       if (recorder.state !== "inactive") {
         recorder.stop();
       }
-      stream.getTracks().forEach((track) => track.stop());
+      stopTracks();
       widget.destroy();
       activeSession = null;
     }
@@ -186,8 +159,8 @@
       if (isStopped || recorder.state === "inactive") return;
       isStopped = true;
       globalScope.clearInterval(timerId);
+      // Let recorder flush remaining buffers before stopping tracks
       recorder.stop();
-      stream.getTracks().forEach((track) => track.stop());
     }
 
     recorder.addEventListener("dataavailable", (event) => {
@@ -197,45 +170,63 @@
     });
 
     recorder.addEventListener("stop", async () => {
-      const rawBlob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
-      const duration = await trimmer.getVideoDuration(rawBlob);
+      // Delay track cleanup to ensure all buffers flush without stream termination errors
+      stopTracks();
 
-      // Transition widget to Review & Trimming state
+      const outputMime = recorder.mimeType || "video/webm";
+      const rawBlob = new Blob(chunks, { type: outputMime });
+      let duration = 0;
+
+      try {
+        duration = await trimmer.getVideoDuration(rawBlob);
+      } catch (_e) {
+        duration = (performance.now() - startedAt) / 1000;
+      }
+
       widget.setReviewState(rawBlob, duration);
 
-      // Discard button
       widget.elements.secondaryBtn.onclick = () => {
         widget.destroy();
         activeSession = null;
       };
 
-      // Save Clip button
       widget.elements.primaryBtn.onclick = async () => {
         const trimRange = widget.getTrimRange();
-        const isTrimming = trimRange.inTime > 0.08 || trimRange.outTime < (trimRange.totalDuration - 0.08);
+        const isTrimming =
+          trimRange.inTime > 0.08 ||
+          trimRange.outTime < (trimRange.totalDuration - 0.08);
 
         widget.setSavingState(isTrimming);
 
-        try {
-          const processedBlob = await trimmer.trimWebmBlob(
-            rawBlob,
-            trimRange.inTime,
-            trimRange.outTime,
-            trimRange.totalDuration,
-            (progress) => widget.updateProgress(progress)
-          );
+        const baseFilename = widget.getFilename();
+        const finalFilename = smartName?.ensureWebmExtension
+          ? smartName.ensureWebmExtension(baseFilename)
+          : `${baseFilename}.webm`;
 
-          const finalFilename = smartName.ensureWebmExtension(widget.getFilename());
+        try {
+          let processedBlob = rawBlob;
+          if (isTrimming && trimmer?.trimWebmBlob) {
+            processedBlob = await trimmer.trimWebmBlob(
+              rawBlob,
+              trimRange.inTime,
+              trimRange.outTime,
+              trimRange.totalDuration,
+              (progress) => widget.updateProgress(progress)
+            );
+          }
           await downloadClipBlob(processedBlob, finalFilename);
+        } catch (_err) {
+          fallbackToAnchor(rawBlob, finalFilename);
+        } finally {
           widget.destroy();
           activeSession = null;
-        } catch (err) {
-          widget.setErrorState(strings.errorTitle, err && err.message ? err.message : strings.downloadFailed);
         }
       };
     });
 
-    // Recording buttons
+    // Auto-stop if source video ends
+    video.addEventListener("ended", finishRecording, { once: true });
+
     widget.elements.secondaryBtn.onclick = cancelSession;
     widget.elements.primaryBtn.onclick = finishRecording;
 
@@ -252,17 +243,13 @@
       activeSession.finishRecording();
     }
 
-    if (!(selectedVideo instanceof HTMLVideoElement) || !document.contains(selectedVideo)) {
-      selectedVideo = getBestVideoOnPage();
-    }
-
     if (!(selectedVideo instanceof HTMLVideoElement)) {
-      showError(strings.noVideoSelected);
+      showError(strings.noVideoSelected || "No video element selected");
       return;
     }
 
     if (!globalScope.MediaRecorder) {
-      showError(strings.captureUnsupported);
+      showError(strings.captureUnsupported || "MediaRecorder is not supported");
       return;
     }
 
@@ -270,11 +257,11 @@
       activeSession = createSession(selectedVideo, tabTitle);
     } catch (_error) {
       activeSession = null;
-      showError(strings.captureUnsupported);
+      showError(strings.captureUnsupported || "Failed to initialize capture session");
     }
   }
 
-  api.runtime.onMessage.addListener((request) => {
+  api?.runtime?.onMessage?.addListener((request) => {
     if (request && request.type === "CLIPIT_START_RECORDING") {
       startRecording(request.tabTitle);
     }
